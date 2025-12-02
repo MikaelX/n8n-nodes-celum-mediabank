@@ -1,0 +1,14 @@
+{
+	"node": "n8n-nodes-celum-mediabank.celumMediabank",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"categories": ["Marketing"],
+	"resources": {
+		"primaryDocumentation": [
+			{
+				"url": "https://github.com/n8n-io/n8n-nodes-celum-mediabank"
+			}
+		]
+	}
+}
+

@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.turbo/
+*.log
+.DS_Store
+*.tsbuildinfo
+
+# OpenAPI specification (may contain sensitive URLs/examples)
+openapi.json
+
+# Cursor IDE internal files
+.cursor/
+
