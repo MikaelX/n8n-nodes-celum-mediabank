@@ -1,5 +1,6 @@
 import type {
 	IAuthenticateGeneric,
+	ICredentialTestRequest,
 	ICredentialType,
 	INodeProperties,
 } from 'n8n-workflow';
@@ -41,6 +42,31 @@ export class CelumMediabankApi implements ICredentialType {
 				'X-API-KEY': '={{$credentials.apiKey}}',
 			},
 		},
+	};
+
+	test: ICredentialTestRequest = {
+		request: {
+			method: 'GET',
+			url: '={{$credentials.baseUrl.replace(/\\/$/, "") + "/collections"}}',
+			headers: {
+				'X-API-KEY': '={{$credentials.apiKey}}',
+				'Content-Type': 'application/json',
+			},
+			qs: {
+				page: 1,
+				size: 1,
+			},
+		},
+		rules: [
+			{
+				type: 'responseSuccessBody',
+				properties: {
+					key: 'page',
+					value: '',
+					message: 'Credentials validated successfully',
+				},
+			},
+		],
 	};
 }
 

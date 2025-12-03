@@ -5,6 +5,10 @@ dist/
 .DS_Store
 *.tsbuildinfo
 
+# Compiled JavaScript files (should only be in dist/)
+src/**/*.js
+src/**/*.js.map
+
 # OpenAPI specification (may contain sensitive URLs/examples)
 openapi.json
 
