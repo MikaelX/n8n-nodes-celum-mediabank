@@ -4,7 +4,7 @@ A comprehensive n8n community node for integrating with the Celum Mediabank API.
 
 ## Features
 
-- **9 Operations** covering all major Celum Mediabank API endpoints
+- **10 Operations** covering all major Celum Mediabank API endpoints
 - **Custom Credential Type** for secure API key authentication
 - **TypeScript** implementation with full type safety
 - **Modular Architecture** for easy maintenance and extension
@@ -181,14 +181,35 @@ Request an upload URL and handle for file uploads.
 - Get upload credentials
 - Part of the upload workflow
 
+**Returns:**
+- `url`: The upload URL where the file should be uploaded
+- `handle`: The upload handle needed for version creation
+
+#### 8. Upload Binary
+Upload a binary file to a provided upload URL and optionally create a new asset version.
+
+**Features:**
+- Upload binary files directly from input items
+- Uploads to a provided upload URL (from Request Upload Location)
+- Optional checkbox to create a new asset version after upload
+- Requires upload URL and handle from Request Upload Location operation
+
+**Use Cases:**
+- Upload files from previous nodes (e.g., HTTP Request, File System)
+- Upload and create version in a single operation
+- Complete the upload workflow after requesting upload location
+
 **Upload Workflow:**
-1. Request upload location (this operation)
-2. Upload file to returned URL using PUT request
-3. Create asset version with upload handle
+1. **Request Upload Location** - Get upload URL and handle
+2. **Upload Binary** - Upload file to the URL and optionally create version
+   - Select binary property from input item
+   - Provide upload URL and handle from step 1
+   - Optionally enable "Create Version After Upload" checkbox
+   - If enabled, provide Asset ID and filename for version creation
 
 ### Collection Operations
 
-#### 8. Search Collections
+#### 9. Search Collections
 Search for collections by name or parent collection.
 
 **Features:**
@@ -206,7 +227,7 @@ Search for collections by name or parent collection.
 
 ### Asset Type Operations
 
-#### 9. Get Asset Type
+#### 10. Get Asset Type
 Retrieve asset type definition with information fields.
 
 **Features:**
@@ -344,26 +365,32 @@ This links the node to `~/.n8n/custom/` and watches for changes.
 
 ### Example 3: Upload File Workflow
 
-1. **Request Upload Location:**
-   ```json
-   {
-     "operation": "requestUploadLocation",
-     "filename": "image.jpg",
-     "filesize": 1024000
-   }
-   ```
+**Step 1: Request Upload Location**
+```json
+{
+  "operation": "requestUploadLocation",
+  "filename": "image.jpg",
+  "filesize": 1024000
+}
+```
 
-2. **Upload file** to the returned URL (using HTTP Request node with PUT method)
+**Step 2: Upload Binary**
+```json
+{
+  "operation": "uploadBinary",
+  "uploadUrl": "{{ $json.url }}",
+  "uploadHandle": "{{ $json.handle }}",
+  "binaryPropertyName": "data",
+  "createVersion": true,
+  "assetId": 12345,
+  "filename": "image.jpg"
+}
+```
 
-3. **Create Asset Version:**
-   ```json
-   {
-     "operation": "createAssetVersion",
-     "assetId": 12345,
-     "filename": "image.jpg",
-     "uploadHandle": "{{ $json.handle }}"
-   }
-   ```
+**Complete Workflow:**
+1. Request upload location to get URL and handle
+2. Upload binary file to the returned URL
+3. Optionally create version using the handle
 
 ## API Documentation
 

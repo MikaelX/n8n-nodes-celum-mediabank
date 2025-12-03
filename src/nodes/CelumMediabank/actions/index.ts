@@ -6,6 +6,7 @@ import * as updateAsset from './updateAsset.operation';
 import * as createAsset from './createAsset.operation';
 import * as createAssetVersion from './createAssetVersion.operation';
 import * as requestUploadLocation from './requestUploadLocation.operation';
+import * as uploadBinary from './uploadBinary.operation';
 import * as searchCollections from './searchCollections.operation';
 import * as getAssetType from './getAssetType.operation';
 
@@ -43,6 +44,10 @@ export const operations: Record<
 	requestUploadLocation: {
 		description: requestUploadLocation.description,
 		execute: requestUploadLocation.execute,
+	},
+	uploadBinary: {
+		description: uploadBinary.description,
+		execute: uploadBinary.execute,
 	},
 	searchCollections: {
 		description: searchCollections.description,
