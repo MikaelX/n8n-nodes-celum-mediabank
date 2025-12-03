@@ -1,31 +1,308 @@
 # n8n-nodes-celum-mediabank
 
-n8n community node for integrating with Celum Mediabank API.
+A comprehensive n8n community node for integrating with the Celum Mediabank API. This node provides full CRUD operations for digital asset management, including asset search, collection management, file uploads, and asset type definitions.
+
+## Features
+
+- **9 Operations** covering all major Celum Mediabank API endpoints
+- **Custom Credential Type** for secure API key authentication
+- **TypeScript** implementation with full type safety
+- **Modular Architecture** for easy maintenance and extension
+- **Community Package** - works with any n8n installation
 
 ## Installation
 
-### Option 1: Development Mode (Recommended for Local Development)
-
-The easiest way to test and develop locally is using the built-in development server:
+### Install from npm (Recommended)
 
 ```bash
+npm install n8n-nodes-celum-mediabank
+# or
+pnpm add n8n-nodes-celum-mediabank
+```
+
+After installation, restart your n8n instance. The node will be automatically available.
+
+### Install from Local Path
+
+```bash
+# Build the node first
+cd /path/to/n8n-nodes-celum-mediabank
+pnpm build
+
+# Install from local path
+npm install /path/to/n8n-nodes-celum-mediabank
+# or
+pnpm add /path/to/n8n-nodes-celum-mediabank
+
+# Restart n8n
+```
+
+### Development Mode
+
+For local development and testing:
+
+```bash
+# Clone the repository
+git clone https://github.com/MikaelX/n8n-nodes-celum-mediabank.git
+cd n8n-nodes-celum-mediabank
+
+# Install dependencies
 pnpm install
+
+# Start development server (includes n8n)
 pnpm dev
 ```
 
 This will:
-- Build your node automatically
-- Start n8n with your node loaded
+- Build the node automatically
+- Start n8n on `http://localhost:5678`
 - Watch for changes and rebuild automatically
-- Open n8n in your browser at `http://localhost:5678`
+- Hot reload without restarting n8n
 
-The node will be available immediately and updates automatically when you make changes.
+## Quick Start
 
-### Option 2: Install in Existing n8n Instance
+1. **Install the package** (see Installation above)
+2. **Create Credentials:**
+   - Go to **Credentials** in n8n
+   - Click **Add Credential**
+   - Search for **"Celum Mediabank API"**
+   - Enter your API Key and Base URL (e.g., `https://your-instance.celum.cloud/content-api/v1`)
+   - Save the credential
+3. **Use the Node:**
+   - Create a new workflow in n8n
+   - Add the **Celum Mediabank** node
+   - Select your credential
+   - Choose an operation and configure it
 
-This package works as a **standalone community package**, completely isolated from any n8n installation. It follows standard community node patterns.
+## Operations
 
-#### Method A: Development Mode with External n8n
+The node supports 9 operations covering all major Celum Mediabank functionality:
+
+### Asset Operations
+
+#### 1. Search Assets
+Search for assets using full-text search or field-based filters.
+
+**Features:**
+- Full-text search by UUID, name, or metadata
+- 50+ filter types (ASSET_FULLTEXT, field-based filters, etc.)
+- Pagination support (page and size)
+- Multiple sort fields (creation date, modification date, name, ID, filename, file size, etc.)
+- Ascending/descending sort order
+
+**Use Cases:**
+- Find assets by UUID
+- Search assets by metadata fields
+- List assets with pagination
+- Sort assets by various criteria
+
+#### 2. Get Asset
+Retrieve detailed information about a specific asset by ID.
+
+**Features:**
+- Get asset by ID
+- Customizable inclusions (information fields, permissions, file properties, external references, download formats)
+- Locale support for localized values
+- Filter specific information fields and download formats
+- Permission evaluation
+
+**Use Cases:**
+- Get complete asset details
+- Retrieve asset metadata
+- Check asset permissions
+- Get available download formats
+
+#### 3. Create Asset
+Create a new asset in the mediabank.
+
+**Features:**
+- Create asset with name and metadata
+- Specify parent collection
+- Assign asset type
+- Set initial information field values
+- Optional upload handle for immediate file association
+
+**Use Cases:**
+- Create placeholder assets
+- Create assets with initial metadata
+- Prepare assets for file upload
+
+#### 4. Update Asset
+Update asset metadata, name, or lock status.
+
+**Features:**
+- Update asset name
+- Modify lock status (set, clear, or leave unchanged)
+- Update information field values (TEXT, LOCALIZED_TEXT, COLLECTION_REFERENCE, TAG_REFERENCE, etc.)
+- Support for field operations (SET, CLEAR, MODIFY)
+
+**Use Cases:**
+- Update asset metadata
+- Change asset name
+- Lock/unlock assets
+- Modify information fields
+
+#### 5. Delete Asset
+Delete an asset from the mediabank.
+
+**Features:**
+- Delete asset by ID
+- Returns success confirmation
+
+**Use Cases:**
+- Remove assets from mediabank
+- Clean up unused assets
+
+#### 6. Create Asset Version
+Add a new version to an existing asset.
+
+**Features:**
+- Add new version with filename
+- Associate uploaded file via upload handle
+- Part of the file upload workflow
+
+**Use Cases:**
+- Upload new file versions
+- Replace asset files
+- Add additional versions to assets
+
+### Upload Operations
+
+#### 7. Request Upload Location
+Request an upload URL and handle for file uploads.
+
+**Features:**
+- Get upload URL for file upload
+- Receive upload handle for version creation
+- Specify filename and file size
+
+**Use Cases:**
+- Prepare for file upload
+- Get upload credentials
+- Part of the upload workflow
+
+**Upload Workflow:**
+1. Request upload location (this operation)
+2. Upload file to returned URL using PUT request
+3. Create asset version with upload handle
+
+### Collection Operations
+
+#### 8. Search Collections
+Search for collections by name or parent collection.
+
+**Features:**
+- Search by collection name
+- Filter by parent collection ID
+- Recursive search (include sub-collections)
+- Pagination support
+- Locale support
+
+**Use Cases:**
+- Find collections by name
+- List collections in a parent
+- Navigate collection hierarchy
+- Search recursively through sub-collections
+
+### Asset Type Operations
+
+#### 9. Get Asset Type
+Retrieve asset type definition with information fields.
+
+**Features:**
+- Get asset type by ID
+- Retrieve information field definitions
+- Locale support for localized field names
+
+**Use Cases:**
+- Understand asset type structure
+- Get field definitions for metadata mapping
+- Discover available information fields
+
+## Credentials
+
+The node uses a custom credential type **"Celum Mediabank API"** with the following fields:
+
+- **API Key** (required): Your Celum Mediabank API key for authentication
+- **Base URL** (required): Your Celum Mediabank instance URL (e.g., `https://your-instance.celum.cloud/content-api/v1`)
+
+The credential uses HTTP header authentication with the `X-API-KEY` header.
+
+## Project Structure
+
+```
+n8n-nodes-celum-mediabank/
+├── src/
+│   ├── credentials/
+│   │   └── CelumMediabank.credentials.ts    # Credential definition
+│   └── nodes/
+│       └── CelumMediabank/
+│           ├── CelumMediabank.node.ts       # Main node implementation
+│           ├── CelumMediabank.node.json    # Node metadata
+│           ├── GenericFunctions.ts          # Shared API functions
+│           ├── celummediabank.svg          # Node icon
+│           └── actions/                     # Operation implementations
+│               ├── index.ts                 # Operation registry
+│               ├── searchAssets.operation.ts
+│               ├── getAsset.operation.ts
+│               ├── createAsset.operation.ts
+│               ├── updateAsset.operation.ts
+│               ├── deleteAsset.operation.ts
+│               ├── createAssetVersion.operation.ts
+│               ├── requestUploadLocation.operation.ts
+│               ├── searchCollections.operation.ts
+│               ├── getAssetType.operation.ts
+│               └── filterTypes.ts           # Filter type definitions
+├── dist/                                    # Compiled output
+├── scripts/
+│   └── fix-node-exports.js                 # Build script
+├── package.json
+├── tsconfig.json
+└── README.md
+```
+
+## Development
+
+### Prerequisites
+
+- Node.js (v22 or higher)
+- pnpm (recommended) or npm/yarn
+
+### Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/MikaelX/n8n-nodes-celum-mediabank.git
+cd n8n-nodes-celum-mediabank
+
+# Install dependencies
+pnpm install
+```
+
+### Development Commands
+
+```bash
+# Start development server (includes n8n)
+pnpm dev
+
+# Build for production
+pnpm build
+
+# Build in watch mode
+pnpm build:watch
+
+# Run linter
+pnpm lint
+pnpm lint:fix
+
+# Type check
+pnpm typecheck
+
+# Create release
+pnpm release
+```
+
+### Development Mode with External n8n
 
 If you have n8n running separately:
 
@@ -35,161 +312,73 @@ pnpm build
 pnpm dev --external-n8n
 ```
 
-This links the node to `~/.n8n/custom/` (standard community node location) and watches for changes.
+This links the node to `~/.n8n/custom/` and watches for changes.
 
-#### Method B: Install from Local Path
+## Examples
 
-```bash
-# Build the node first
-pnpm build
+### Example 1: Search for Asset by UUID
 
-# Install from local path (works with any n8n installation)
-npm install /path/to/n8n-celum-mediabank
-# or
-pnpm add /path/to/n8n-celum-mediabank
-
-# Restart n8n
+```json
+{
+  "operation": "searchAssets",
+  "searchText": "your-uuid-here",
+  "filterType": "ASSET_FULLTEXT",
+  "page": 1,
+  "size": 20,
+  "sortField": "creation.date",
+  "sortOrder": "DESC"
+}
 ```
 
-#### Method C: Copy to Custom Nodes Directory (Standard Method)
+### Example 2: Create Asset with Metadata
 
-```bash
-# Build the node
-pnpm build
-
-# Copy to standard community node location
-mkdir -p ~/.n8n/custom
-cp -r dist ~/.n8n/custom/n8n-nodes-celum-mediabank
-
-# Restart n8n
+```json
+{
+  "operation": "createAsset",
+  "name": "My Asset",
+  "parentId": 12345,
+  "typeId": 2200,
+  "informationFieldValues": "[{\"id\": 643, \"value\": \"example\", \"type\": \"TEXT\"}]"
+}
 ```
 
-**Note:** n8n automatically loads community nodes from `~/.n8n/custom/` - this is the standard installation location.
+### Example 3: Upload File Workflow
 
-#### Method D: Install from npm (after publishing)
+1. **Request Upload Location:**
+   ```json
+   {
+     "operation": "requestUploadLocation",
+     "filename": "image.jpg",
+     "filesize": 1024000
+   }
+   ```
 
-```bash
-npm install n8n-nodes-celum-mediabank
-# Restart n8n
-```
+2. **Upload file** to the returned URL (using HTTP Request node with PUT method)
 
-**Important:** This package is completely isolated and works with any n8n installation (monorepo, standalone, Docker, etc.) without requiring modifications to the n8n codebase.
-
-### Option 3: Use External n8n Instance
-
-If you have n8n running separately and want to develop against it:
-
-```bash
-pnpm dev --external-n8n
-```
-
-This will build and link your node without starting n8n (assumes n8n is already running).
-
-## Usage
-
-After installation, the Celum Mediabank node will be available in your n8n instance. You can use it to interact with the Celum Mediabank API for digital asset management operations.
-
-### Setting Up Credentials
-
-1. Go to **Credentials** in n8n
-2. Click **Add Credential**
-3. Search for **"Celum Mediabank API"**
-4. Enter your:
-   - **API Key**: Your Celum Mediabank API key
-   - **Base URL**: API endpoint (e.g., `https://your-instance.celum.cloud/content-api/v1`)
-5. Save the credential
-6. Use it when configuring the Celum Mediabank node
-
-## Development
-
-This project uses `@n8n/node-cli` for development, following the modern n8n node development approach.
-
-### Prerequisites
-
-- Node.js (v22 or higher)
-- pnpm (or npm/yarn)
-
-### Setup
-
-```bash
-pnpm install
-```
-
-### Development Mode (with hot reload)
-
-```bash
-pnpm dev
-```
-
-Starts n8n with your node loaded and automatically rebuilds on changes. Opens n8n in your browser (usually http://localhost:5678).
-
-### Build
-
-```bash
-pnpm build
-```
-
-Compiles TypeScript to JavaScript for production.
-
-### Build (Watch Mode)
-
-```bash
-pnpm build:watch
-```
-
-Builds in watch mode (auto-rebuilds on changes).
-
-### Lint
-
-```bash
-pnpm lint
-pnpm lint:fix
-```
-
-Check code for errors and auto-fix issues when possible.
-
-### Type Check
-
-```bash
-pnpm typecheck
-```
-
-Type check without building.
-
-### Release
-
-```bash
-pnpm release
-```
-
-Create a new release.
-
-## Project Structure
-
-```
-n8n-nodes-celum-mediabank/
-├── src/
-│   └── nodes/
-│       └── CelumMediabank/
-│           ├── CelumMediabank.node.ts      # Main node implementation
-│           └── CelumMediabank.node.json    # Node metadata
-├── dist/                                   # Compiled output
-├── package.json
-└── tsconfig.json
-```
-
-## Resources
-
-- **Asset** - CRUD operations for assets
-- **Collection** - Search and get collections
-- **Asset Type** - Get asset type definitions
-- **Upload** - File upload operations
+3. **Create Asset Version:**
+   ```json
+   {
+     "operation": "createAssetVersion",
+     "assetId": 12345,
+     "filename": "image.jpg",
+     "uploadHandle": "{{ $json.handle }}"
+   }
+   ```
 
 ## API Documentation
 
 For detailed API documentation, refer to the [Celum Mediabank API documentation](https://docs.celum.com).
 
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
 ## License
 
 MIT License - see [LICENSE.md](LICENSE.md) for details.
 
+## Support
+
+For issues, feature requests, or questions:
+- Open an issue on [GitHub](https://github.com/MikaelX/n8n-nodes-celum-mediabank/issues)
+- Check the [n8n Community Forum](https://community.n8n.io/)

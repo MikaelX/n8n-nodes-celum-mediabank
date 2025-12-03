@@ -9,6 +9,7 @@ This is the standard way to develop and test community nodes - it's completely i
 ```bash
 # From the node package directory
 cd /path/to/n8n-nodes-celum-mediabank
+pnpm install
 pnpm dev
 ```
 
@@ -104,13 +105,13 @@ For development with your monorepo n8n:
 
 ```bash
 # Terminal 1: Start your monorepo n8n
-cd ../n8n
+cd /path/to/n8n
 pnpm dev
 
 # Terminal 2: Develop the node (links to running n8n)
 cd /path/to/n8n-nodes-celum-mediabank
+pnpm build
 pnpm dev --external-n8n
-```
 ```
 
 This gives you:
@@ -119,4 +120,3 @@ This gives you:
 - ✅ Hot reload
 - ✅ No monorepo modifications
 - ✅ Standard community package workflow
-
