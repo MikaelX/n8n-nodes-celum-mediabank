@@ -2,9 +2,10 @@ import type {
 	IExecuteFunctions,
 	INodeProperties,
 	INodeExecutionData,
+	IRequestOptions,
 	IHttpRequestOptions,
 } from 'n8n-workflow';
-import { apiRequest, getCredentials } from '../GenericFunctions';
+import { apiRequest, getCredentials, getAuthHeaders } from '../GenericFunctions';
 
 export const description: INodeProperties[] = [
 	{
@@ -110,6 +111,7 @@ export const description: INodeProperties[] = [
 
 /**
  * Upload binary file to the upload URL
+ * This matches n8n HTTP Request node behavior exactly - no special handling for presigned URLs
  */
 async function uploadBinaryFile(
 	this: IExecuteFunctions,
@@ -120,6 +122,7 @@ async function uploadBinaryFile(
 	binaryPropertyName: string,
 	itemIndex: number,
 ): Promise<unknown> {
+	// Get credentials to apply authentication headers from credential's authenticate property
 	const credentials = await getCredentials.call(this);
 	const inputData = this.getInputData();
 	const item = inputData[itemIndex];
@@ -129,18 +132,24 @@ async function uploadBinaryFile(
 		throw new Error(`No binary property "${binaryPropertyName}" found`);
 	}
 
+	// Apply credential authentication headers (from credential's authenticate property)
+	// This matches HTTP Request node behavior - always apply credential headers when configured
+	// The credential system handles whether headers are needed for the specific URL
+	const authHeaders = getAuthHeaders(credentials);
+
 	if (bodyContentType === 'formData') {
-		// Upload as form-data/multipart
+		// Upload as form-data/multipart (POST) - matches n8n HTTP Request node with formBinaryData
+		// n8n HTTP Request node uses: parameterType: "formBinaryData", contentType: "multipart-form-data"
 		const mimeType = (binaryProperty?.mimeType as string) || 'application/octet-stream';
 		const fileName = (binaryProperty?.fileName as string) || String(binaryProperty?.name || 'file');
 
-		const options: IHttpRequestOptions = {
+		// Use formData property with { value, options } structure
+		// This matches HTTP Request node behavior - it uses helpers.request with formData property
+		// The request helper automatically converts { value, options } to FormData
+		const options: IRequestOptions = {
 			method: 'POST',
 			url: uploadUrl,
-			headers: {
-				'X-API-KEY': credentials.apiKey,
-			},
-			body: {
+			formData: {
 				[formFieldName]: {
 					value: binaryData,
 					options: {
@@ -151,10 +160,26 @@ async function uploadBinaryFile(
 			},
 		};
 
-		const response = await this.helpers.httpRequest(options);
-		return response;
+		// Add credential headers if configured
+		// HTTP Request node adds credential headers when configured
+		// The credential system handles whether headers are needed for the specific URL
+		if (Object.keys(authHeaders).length > 0) {
+			options.headers = authHeaders;
+		}
+
+		try {
+			const response = await this.helpers.request(options);
+			return response;
+		} catch (error) {
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			const statusCode = (error as { response?: { status?: number } })?.response?.status;
+			throw new Error(
+				`Upload failed: ${errorMessage}${statusCode ? ` (${statusCode})` : ''}`,
+			);
+		}
 	} else {
-		// Upload as raw binary (PUT)
+		// Upload as raw binary (PUT) - matches n8n HTTP Request node with binaryData
+		// n8n HTTP Request node sets content-type and content-length headers automatically
 		const mimeType = (binaryProperty?.mimeType as string) || 'application/octet-stream';
 		const contentLength = binaryData.length;
 
@@ -163,14 +188,22 @@ async function uploadBinaryFile(
 			url: uploadUrl,
 			body: binaryData,
 			headers: {
+				...authHeaders,
 				'Content-Type': mimeType,
 				'Content-Length': String(contentLength),
-				'X-API-KEY': credentials.apiKey,
 			},
 		};
 
-		const response = await this.helpers.httpRequest(options);
-		return response;
+		try {
+			const response = await this.helpers.httpRequest(options);
+			return response;
+		} catch (error) {
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			const statusCode = (error as { response?: { status?: number } })?.response?.status;
+			throw new Error(
+				`Upload failed: ${errorMessage}${statusCode ? ` (${statusCode})` : ''}`,
+			);
+		}
 	}
 }
 
@@ -188,13 +221,14 @@ export async function execute(
 		throw new Error('Upload URL is required');
 	}
 
-	// Get binary data
+	// Get binary data - same as n8n HTTP Request node
 	const binaryData = await this.helpers.getBinaryDataBuffer(itemIndex, binaryPropertyName);
 	if (!binaryData) {
 		throw new Error(`No binary data found in property "${binaryPropertyName}"`);
 	}
 
 	// Upload the binary file to the provided URL
+	// This behaves exactly like n8n HTTP Request node - no special presigned URL handling
 	await uploadBinaryFile.call(
 		this,
 		uploadUrl,

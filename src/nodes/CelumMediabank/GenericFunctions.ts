@@ -19,6 +19,43 @@ export async function getCredentials(
 }
 
 /**
+ * Get authentication headers from credential's authenticate property
+ * This respects whatever headers the credential defines dynamically
+ * Reads from the credential class's authenticate property
+ */
+export function getAuthHeaders(credentials: CelumCredentials): Record<string, string> {
+	// Import credential class to read its authenticate property
+	// The credential defines: { 'X-API-KEY': '={{$credentials.apiKey}}' }
+	// We apply the headers as defined, resolving the expression with actual credential values
+	// This allows the credential to define any headers it needs - we respect that configuration
+	const { CelumMediabankApi } = require('../../credentials/CelumMediabank.credentials');
+	const authConfig = CelumMediabankApi.prototype.authenticate as {
+		type: string;
+		properties: { headers: Record<string, string> };
+	};
+
+	// Apply headers as defined in credential's authenticate property
+	// Resolve expressions like '={{$credentials.apiKey}}' with actual values
+	const authHeaders: Record<string, string> = {};
+	if (authConfig?.properties?.headers) {
+		for (const [headerName, headerValue] of Object.entries(authConfig.properties.headers)) {
+			// Resolve expression: '={{$credentials.apiKey}}' -> credentials.apiKey value
+			if (headerValue.includes('$credentials.apiKey')) {
+				authHeaders[headerName] = credentials.apiKey;
+			} else {
+				// For other expressions or static values, resolve them
+				authHeaders[headerName] = headerValue.replace(/\{\{\$credentials\.(\w+)\}\}/g, (_, key) => {
+					const creds = credentials as unknown as Record<string, string>;
+					return creds[key] || '';
+				});
+			}
+		}
+	}
+
+	return authHeaders;
+}
+
+/**
  * Make authenticated API request to Celum Mediabank
  */
 export async function apiRequest(
