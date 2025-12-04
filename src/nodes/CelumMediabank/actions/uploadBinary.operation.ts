@@ -221,10 +221,40 @@ export async function execute(
 		throw new Error('Upload URL is required');
 	}
 
+	// Verify binary data exists in input item
+	const inputData = this.getInputData();
+	const item = inputData[itemIndex];
+	
+	if (!item) {
+		throw new Error('No input item found at the specified index');
+	}
+
+	if (!item.binary || Object.keys(item.binary).length === 0) {
+		const availableProperties = item.binary ? Object.keys(item.binary).join(', ') : 'none';
+		throw new Error(
+			`No binary data found in input item. ` +
+			`Available binary properties: ${availableProperties}. ` +
+			`Please ensure the previous node outputs binary data.`,
+		);
+	}
+
+	if (!item.binary[binaryPropertyName]) {
+		const availableProperties = Object.keys(item.binary).join(', ');
+		throw new Error(
+			`Binary property "${binaryPropertyName}" not found in input item. ` +
+			`Available binary properties: ${availableProperties}. ` +
+			`Please check the binary property name or ensure the previous node outputs binary data with this property name.`,
+		);
+	}
+
 	// Get binary data - same as n8n HTTP Request node
 	const binaryData = await this.helpers.getBinaryDataBuffer(itemIndex, binaryPropertyName);
 	if (!binaryData) {
-		throw new Error(`No binary data found in property "${binaryPropertyName}"`);
+		throw new Error(
+			`Failed to retrieve binary data from property "${binaryPropertyName}". ` +
+			`The binary property exists but contains no data. ` +
+			`Please ensure the binary data is properly set in the input item.`,
+		);
 	}
 
 	// Upload the binary file to the provided URL
