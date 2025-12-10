@@ -1,4 +1,4 @@
-import type { IExecuteFunctions, INodeProperties, INodeExecutionData } from 'n8n-workflow';
+import type { IExecuteFunctions, INodeProperties, INodeExecutionData, IDataObject } from 'n8n-workflow';
 import { apiRequest } from '../GenericFunctions';
 
 export const description: INodeProperties[] = [
@@ -51,6 +51,13 @@ export const description: INodeProperties[] = [
 		default: 20,
 		description: 'Number of results per page',
 	},
+	{
+		displayName: 'Return Response Headers and Body',
+		name: 'returnFullResponse',
+		type: 'boolean',
+		default: false,
+		description: 'Whether to return response headers and body separately',
+	},
 ];
 
 export async function execute(
@@ -63,6 +70,7 @@ export async function execute(
 	const recursive = this.getNodeParameter('recursive', itemIndex, false) as boolean;
 	const page = this.getNodeParameter('page', itemIndex, 1) as number;
 	const size = this.getNodeParameter('size', itemIndex, 20) as number;
+	const returnFullResponse = this.getNodeParameter('returnFullResponse', itemIndex, false) as boolean;
 
 	// Build query parameters
 	const queryParams: Record<string, string | string[] | number[] | boolean | number> = {};
@@ -109,7 +117,34 @@ export async function execute(
 
 	try {
 		// Make API request
-		const responseData = await apiRequest.call(this, 'GET', '/collections', undefined, queryParams);
+		const responseData = await apiRequest.call(
+			this,
+			'GET',
+			'/collections',
+			undefined,
+			queryParams,
+			returnFullResponse,
+		);
+
+		if (returnFullResponse) {
+			const fullResponse = responseData as {
+				body: unknown;
+				headers: Record<string, string | string[]>;
+				statusCode?: number;
+			};
+			if ('body' in fullResponse && 'headers' in fullResponse) {
+				return {
+					json: {
+						body: fullResponse.body as IDataObject,
+						headers: fullResponse.headers,
+						...(fullResponse.statusCode && { statusCode: fullResponse.statusCode }),
+					},
+					pairedItem: {
+						item: itemIndex,
+					},
+				};
+			}
+		}
 
 		return {
 			json: responseData,

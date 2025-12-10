@@ -1,4 +1,4 @@
-import type { IExecuteFunctions, INodeProperties, INodeExecutionData } from 'n8n-workflow';
+import type { IExecuteFunctions, INodeProperties, INodeExecutionData, IDataObject } from 'n8n-workflow';
 import { apiRequest } from '../GenericFunctions';
 
 export const description: INodeProperties[] = [
@@ -130,6 +130,13 @@ export const description: INodeProperties[] = [
 		default: [],
 		description: 'Specify which permissions to evaluate',
 	},
+	{
+		displayName: 'Return Response Headers and Body',
+		name: 'returnFullResponse',
+		type: 'boolean',
+		default: false,
+		description: 'Whether to return response headers and body separately',
+	},
 ];
 
 export async function execute(
@@ -142,6 +149,7 @@ export async function execute(
 	const informationFields = this.getNodeParameter('informationFields', itemIndex, '') as string;
 	const downloadFormats = this.getNodeParameter('downloadFormats', itemIndex, '') as string;
 	const permissions = this.getNodeParameter('permissions', itemIndex, []) as string[];
+	const returnFullResponse = this.getNodeParameter('returnFullResponse', itemIndex, false) as boolean;
 
 	// Build query parameters
 	const queryParams: Record<string, string | string[] | number[]> = {};
@@ -184,7 +192,28 @@ export async function execute(
 		`/assets/${assetId}`,
 		undefined,
 		queryParams,
+		returnFullResponse,
 	);
+
+	if (returnFullResponse) {
+		const fullResponse = responseData as {
+			body: unknown;
+			headers: Record<string, string | string[]>;
+			statusCode?: number;
+		};
+		if ('body' in fullResponse && 'headers' in fullResponse) {
+			return {
+				json: {
+					body: fullResponse.body as IDataObject,
+					headers: fullResponse.headers,
+					...(fullResponse.statusCode && { statusCode: fullResponse.statusCode }),
+				},
+				pairedItem: {
+					item: itemIndex,
+				},
+			};
+		}
+	}
 
 	return {
 		json: responseData,

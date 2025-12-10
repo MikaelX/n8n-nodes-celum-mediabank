@@ -64,7 +64,10 @@ export async function apiRequest(
 	endpoint: string,
 	body?: IDataObject,
 	queryParams?: Record<string, string | string[] | number[] | boolean | number>,
-): Promise<IDataObject> {
+	returnFullResponse?: boolean,
+): Promise<
+	IDataObject | { body: IDataObject; headers: Record<string, string | string[]>; statusCode?: number }
+> {
 	const credentials = await getCredentials.call(this);
 
 	let url = `${credentials.baseUrl}${endpoint}`;
@@ -101,6 +104,7 @@ export async function apiRequest(
 			'Content-Type': 'application/json',
 		},
 		json: true,
+		returnFullResponse: returnFullResponse ?? false,
 	};
 
 	if (body) {
@@ -109,7 +113,28 @@ export async function apiRequest(
 
 	try {
 		const response = await this.helpers.httpRequest(options);
-		console.log('[Celum Mediabank] API Response received');
+		console.log('[Celum Mediabank] API Response received', {
+			returnFullResponse,
+			responseKeys: Object.keys(response),
+			hasBody: 'body' in response,
+			hasHeaders: 'headers' in response,
+			responseStructure: JSON.stringify(response, null, 2).substring(0, 500),
+		});
+		
+		if (returnFullResponse) {
+			// When returnFullResponse is true, n8n returns { body, headers, statusCode }
+			// The response itself contains body and headers properties
+			if ('body' in response && 'headers' in response) {
+				return {
+					body: response.body as IDataObject,
+					headers: response.headers as Record<string, string | string[]>,
+					...(response.statusCode && { statusCode: response.statusCode }),
+				};
+			}
+			// Fallback: if structure is different, return as-is
+			return response as IDataObject & Record<string, unknown>;
+		}
+		
 		return response as IDataObject & Record<string, unknown>;
 	} catch (error) {
 		// Enhanced error logging

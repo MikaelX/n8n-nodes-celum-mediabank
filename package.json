@@ -1,6 +1,6 @@
 {
 	"name": "n8n-nodes-celum-mediabank",
-	"version": "1.0.7",
+	"version": "1.0.10",
 	"description": "n8n node for Celum Mediabank API",
 	"keywords": [
 		"n8n-community-node-package",
@@ -21,7 +21,7 @@
 		"lint:fix": "n8n-node lint --fix",
 		"release": "n8n-node release",
 		"typecheck": "tsc --noEmit",
-		"pre-publish": "scripts/pre-publish-check.sh",
+		"pre-publish": "bash scripts/pre-publish-check.sh",
 		"prepublishOnly": "npm run pre-publish"
 	},
 	"files": [

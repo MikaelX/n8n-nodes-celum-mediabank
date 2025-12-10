@@ -1,4 +1,4 @@
-import type { IExecuteFunctions, INodeProperties, INodeExecutionData } from 'n8n-workflow';
+import type { IExecuteFunctions, INodeProperties, INodeExecutionData, IDataObject } from 'n8n-workflow';
 import { apiRequest } from '../GenericFunctions';
 import { filterTypeOptions } from './filterTypes';
 
@@ -117,6 +117,13 @@ export const description: INodeProperties[] = [
 		default: 'DESC',
 		description: 'Sort order',
 	},
+	{
+		displayName: 'Return Response Headers and Body',
+		name: 'returnFullResponse',
+		type: 'boolean',
+		default: false,
+		description: 'Whether to return response headers and body separately',
+	},
 ];
 
 export async function execute(
@@ -129,6 +136,7 @@ export async function execute(
 	const size = this.getNodeParameter('size', itemIndex, 20) as number;
 	const sortField = this.getNodeParameter('sortField', itemIndex, 'creation.date') as string;
 	const sortOrder = this.getNodeParameter('sortOrder', itemIndex, 'DESC') as string;
+	const returnFullResponse = this.getNodeParameter('returnFullResponse', itemIndex, false) as boolean;
 
 	// Build request body
 	const requestBody: {
@@ -158,7 +166,34 @@ export async function execute(
 	};
 
 	// Make API request
-	const responseData = await apiRequest.call(this, 'POST', '/assets/search', requestBody);
+	const responseData = await apiRequest.call(
+		this,
+		'POST',
+		'/assets/search',
+		requestBody,
+		undefined,
+		returnFullResponse,
+	);
+
+	if (returnFullResponse) {
+		const fullResponse = responseData as {
+			body: unknown;
+			headers: Record<string, string | string[]>;
+			statusCode?: number;
+		};
+		if ('body' in fullResponse && 'headers' in fullResponse) {
+			return {
+				json: {
+					body: fullResponse.body as IDataObject,
+					headers: fullResponse.headers,
+					...(fullResponse.statusCode && { statusCode: fullResponse.statusCode }),
+				},
+				pairedItem: {
+					item: itemIndex,
+				},
+			};
+		}
+	}
 
 	return {
 		json: responseData,

@@ -1,4 +1,4 @@
-import type { IExecuteFunctions, INodeProperties, INodeExecutionData } from 'n8n-workflow';
+import type { IExecuteFunctions, INodeProperties, INodeExecutionData, IDataObject } from 'n8n-workflow';
 import { apiRequest } from '../GenericFunctions';
 
 export const description: INodeProperties[] = [
@@ -47,6 +47,37 @@ export const description: INodeProperties[] = [
 		description:
 			'Array of information field updates. Each field should have: id, type, and value with op (SET/MODIFY/etc). Example: [{"id": 643, "type": "TEXT", "value": {"op": "SET", "value": "example"}}]',
 	},
+	{
+		displayName: 'Parent IDs',
+		name: 'parentIds',
+		type: 'json',
+		default: '{}',
+		description: 'List of nodes to be linked',
+	},
+	{
+		displayName: 'Availability',
+		name: 'availability',
+		type: 'options',
+		options: [
+			{
+				name: 'Available',
+				value: 'DIRECT',
+			},
+			{
+				name: 'Unavailable',
+				value: 'UNAVAILABLE',
+			},
+		],
+		default: 'Available',
+		description: 'Availability status of the asset',
+	},
+	{
+		displayName: 'Return Response Headers and Body',
+		name: 'returnFullResponse',
+		type: 'boolean',
+		default: false,
+		description: 'Whether to return response headers and body separately',
+	},
 ];
 
 export async function execute(
@@ -61,12 +92,17 @@ export async function execute(
 		itemIndex,
 		'[]',
 	) as string;
+	const parentIdsJson = this.getNodeParameter('parentIds', itemIndex, '[]') as string;
+	const availability = this.getNodeParameter('availability', itemIndex, '') as string;
+	const returnFullResponse = this.getNodeParameter('returnFullResponse', itemIndex, false) as boolean;
 
 	// Build request body
 	const body: {
 		name?: string;
 		lock?: { op: string };
 		informationFieldValues?: unknown[];
+		parentIds?: unknown[];
+		availability?: string;
 	} = {};
 
 	if (name) {
@@ -90,8 +126,52 @@ export async function execute(
 		}
 	}
 
+	if (parentIdsJson) {
+		try {
+			const parentIds = JSON.parse(parentIdsJson);
+			if (Array.isArray(parentIds) && parentIds.length > 0) {
+				body.parentIds = parentIds;
+			}
+		} catch (error) {
+			throw new Error(
+				`Invalid JSON in Parent IDs: ${error instanceof Error ? error.message : String(error)}`,
+			);
+		}
+	}
+
+	if (availability) {
+		body.availability = availability;
+	}
+
 	// Make API request
-	const responseData = await apiRequest.call(this, 'PATCH', `/assets/${assetId}`, body);
+	const responseData = await apiRequest.call(
+		this,
+		'PATCH',
+		`/assets/${assetId}`,
+		body,
+		undefined,
+		returnFullResponse,
+	);
+
+	if (returnFullResponse) {
+		const fullResponse = responseData as {
+			body: unknown;
+			headers: Record<string, string | string[]>;
+			statusCode?: number;
+		};
+		if ('body' in fullResponse && 'headers' in fullResponse) {
+			return {
+				json: {
+					body: fullResponse.body as IDataObject,
+					headers: fullResponse.headers,
+					...(fullResponse.statusCode && { statusCode: fullResponse.statusCode }),
+				},
+				pairedItem: {
+					item: itemIndex,
+				},
+			};
+		}
+	}
 
 	return {
 		json: responseData,

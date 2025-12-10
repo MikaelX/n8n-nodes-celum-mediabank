@@ -4,6 +4,7 @@ import type {
 	INodeExecutionData,
 	IRequestOptions,
 	IHttpRequestOptions,
+	IDataObject,
 } from 'n8n-workflow';
 import { apiRequest, getCredentials, getAuthHeaders } from '../GenericFunctions';
 
@@ -101,6 +102,18 @@ export const description: INodeProperties[] = [
 		default: '',
 		required: true,
 		description: 'Filename for the version (required when creating version)',
+		displayOptions: {
+			show: {
+				createVersion: [true],
+			},
+		},
+	},
+	{
+		displayName: 'Return Response Headers and Body',
+		name: 'returnFullResponse',
+		type: 'boolean',
+		default: false,
+		description: 'Whether to return response headers and body separately (applies to version creation)',
 		displayOptions: {
 			show: {
 				createVersion: [true],
@@ -216,6 +229,7 @@ export async function execute(
 	const bodyContentType = this.getNodeParameter('bodyContentType', itemIndex, 'raw') as string;
 	const formFieldName = this.getNodeParameter('formFieldName', itemIndex, 'file') as string;
 	const createVersion = this.getNodeParameter('createVersion', itemIndex, false) as boolean;
+	const returnFullResponse = this.getNodeParameter('returnFullResponse', itemIndex, false) as boolean;
 
 	if (!uploadUrl) {
 		throw new Error('Upload URL is required');
@@ -293,7 +307,35 @@ export async function execute(
 			'POST',
 			`/assets/${assetId}/versions`,
 			versionBody,
+			undefined,
+			returnFullResponse,
 		);
+
+		if (returnFullResponse) {
+			const fullResponse = versionResponse as {
+				body: unknown;
+				headers: Record<string, string | string[]>;
+				statusCode?: number;
+			};
+			if ('body' in fullResponse && 'headers' in fullResponse) {
+				return {
+					json: {
+						uploadUrl,
+						uploadHandle,
+						version: {
+							body: fullResponse.body as IDataObject,
+							headers: fullResponse.headers,
+							...(fullResponse.statusCode && { statusCode: fullResponse.statusCode }),
+						},
+						uploaded: true,
+						versionCreated: true,
+					},
+					pairedItem: {
+						item: itemIndex,
+					},
+				};
+			}
+		}
 
 		return {
 			json: {
