@@ -65,8 +65,22 @@ export async function apiRequest(
 	body?: IDataObject,
 	queryParams?: Record<string, string | string[] | number[] | boolean | number>,
 	returnFullResponse?: boolean,
+	returnFullRequest?: boolean,
+	throwOnError?: boolean,
 ): Promise<
-	IDataObject | { body: IDataObject; headers: Record<string, string | string[]>; statusCode?: number }
+	| IDataObject
+	| {
+			body: IDataObject;
+			headers: Record<string, string | string[]>;
+			statusCode?: number;
+			request?: {
+				method: string;
+				url: string;
+				headers: Record<string, string>;
+				body?: IDataObject;
+				queryParams?: Record<string, string | string[] | number[] | boolean | number>;
+			};
+	  }
 > {
 	const credentials = await getCredentials.call(this);
 
@@ -84,6 +98,20 @@ export async function apiRequest(
 		});
 		url = urlObj.toString();
 	}
+
+	// Build request details if needed
+	const requestDetails = returnFullRequest
+		? {
+				method,
+				url,
+				headers: {
+					'X-API-KEY': credentials.apiKey,
+					'Content-Type': 'application/json',
+				},
+				...(body && { body }),
+				...(queryParams && Object.keys(queryParams).length > 0 && { queryParams }),
+		  }
+		: undefined;
 
 	// Debug: Log the full request details
 	console.log('[Celum Mediabank] API Request:', {
@@ -121,6 +149,20 @@ export async function apiRequest(
 			responseStructure: JSON.stringify(response, null, 2).substring(0, 500),
 		});
 		
+		// Check for error status codes (non-2xx) if throwOnError is enabled
+		const statusCode = (response as { statusCode?: number })?.statusCode;
+		if (throwOnError && statusCode && (statusCode < 200 || statusCode >= 300)) {
+			const errorBody = returnFullResponse && 'body' in response 
+				? response.body 
+				: response;
+			const errorMessage = typeof errorBody === 'object' && errorBody !== null
+				? JSON.stringify(errorBody)
+				: String(errorBody);
+			throw new Error(
+				`API request failed with status ${statusCode}: ${errorMessage}`,
+			);
+		}
+		
 		if (returnFullResponse) {
 			// When returnFullResponse is true, n8n returns { body, headers, statusCode }
 			// The response itself contains body and headers properties
@@ -129,10 +171,19 @@ export async function apiRequest(
 					body: response.body as IDataObject,
 					headers: response.headers as Record<string, string | string[]>,
 					...(response.statusCode && { statusCode: response.statusCode }),
+					...(requestDetails && { request: requestDetails }),
 				};
 			}
 			// Fallback: if structure is different, return as-is
-			return response as IDataObject & Record<string, unknown>;
+			const fallbackResponse = response as IDataObject & Record<string, unknown>;
+			if (requestDetails) {
+				return { ...fallbackResponse, request: requestDetails };
+			}
+			return fallbackResponse;
+		}
+		
+		if (returnFullRequest && requestDetails) {
+			return { ...(response as IDataObject), request: requestDetails };
 		}
 		
 		return response as IDataObject & Record<string, unknown>;

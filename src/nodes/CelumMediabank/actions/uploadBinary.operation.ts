@@ -120,6 +120,30 @@ export const description: INodeProperties[] = [
 			},
 		},
 	},
+	{
+		displayName: 'Return Full Request Payload',
+		name: 'returnFullRequest',
+		type: 'boolean',
+		default: false,
+		description: 'Whether to include the full request payload (method, URL, headers, body, query params) in the output (applies to version creation)',
+		displayOptions: {
+			show: {
+				createVersion: [true],
+			},
+		},
+	},
+	{
+		displayName: 'Throw Error on Non-2xx Status Codes',
+		name: 'throwOnError',
+		type: 'boolean',
+		default: true,
+		description: 'Whether to throw an error and fail execution when the API returns a 3xx, 4xx, or 5xx status code (applies to version creation)',
+		displayOptions: {
+			show: {
+				createVersion: [true],
+			},
+		},
+	},
 ];
 
 /**
@@ -230,6 +254,8 @@ export async function execute(
 	const formFieldName = this.getNodeParameter('formFieldName', itemIndex, 'file') as string;
 	const createVersion = this.getNodeParameter('createVersion', itemIndex, false) as boolean;
 	const returnFullResponse = this.getNodeParameter('returnFullResponse', itemIndex, false) as boolean;
+	const returnFullRequest = this.getNodeParameter('returnFullRequest', itemIndex, false) as boolean;
+	const throwOnError = this.getNodeParameter('throwOnError', itemIndex, true) as boolean;
 
 	if (!uploadUrl) {
 		throw new Error('Upload URL is required');
@@ -309,6 +335,8 @@ export async function execute(
 			versionBody,
 			undefined,
 			returnFullResponse,
+			returnFullRequest,
+			throwOnError,
 		);
 
 		if (returnFullResponse) {
@@ -316,17 +344,24 @@ export async function execute(
 				body: unknown;
 				headers: Record<string, string | string[]>;
 				statusCode?: number;
+				request?: unknown;
 			};
 			if ('body' in fullResponse && 'headers' in fullResponse) {
+				const versionJson: IDataObject = {
+					body: fullResponse.body as IDataObject,
+					headers: fullResponse.headers,
+				};
+				if (fullResponse.statusCode) {
+					versionJson.statusCode = fullResponse.statusCode;
+				}
+				if (fullResponse.request) {
+					versionJson.request = fullResponse.request;
+				}
 				return {
 					json: {
 						uploadUrl,
 						uploadHandle,
-						version: {
-							body: fullResponse.body as IDataObject,
-							headers: fullResponse.headers,
-							...(fullResponse.statusCode && { statusCode: fullResponse.statusCode }),
-						},
+						version: versionJson,
 						uploaded: true,
 						versionCreated: true,
 					},
@@ -337,11 +372,33 @@ export async function execute(
 			}
 		}
 
+		if (returnFullRequest && 'request' in versionResponse) {
+			const responseObj = versionResponse as IDataObject & { request: unknown };
+			const baseVersion = typeof responseObj === 'object' && responseObj !== null 
+				? { ...responseObj } 
+				: { data: responseObj };
+			return {
+				json: {
+					uploadUrl,
+					uploadHandle,
+					version: {
+						...baseVersion,
+						request: responseObj.request,
+					} as IDataObject,
+					uploaded: true,
+					versionCreated: true,
+				},
+				pairedItem: {
+					item: itemIndex,
+				},
+			};
+		}
+
 		return {
 			json: {
 				uploadUrl,
 				uploadHandle,
-				version: versionResponse,
+				version: versionResponse as IDataObject,
 				uploaded: true,
 				versionCreated: true,
 			},
