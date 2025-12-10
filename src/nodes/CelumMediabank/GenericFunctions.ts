@@ -56,6 +56,47 @@ export function getAuthHeaders(credentials: CelumCredentials): Record<string, st
 }
 
 /**
+ * Sanitize request details by masking credentials
+ */
+function sanitizeRequestDetails(requestDetails: {
+	method: string;
+	url: string;
+	headers: Record<string, string>;
+	body?: IDataObject;
+	queryParams?: Record<string, string | string[] | number[] | boolean | number>;
+}): {
+	method: string;
+	url: string;
+	headers: Record<string, string>;
+	body?: IDataObject;
+	queryParams?: Record<string, string | string[] | number[] | boolean | number>;
+} {
+	const sanitizedHeaders: Record<string, string> = {};
+
+	// List of header names that should be masked
+	const sensitiveHeaders = ['X-API-KEY', 'Authorization', 'api-key', 'apikey', 'api_key'];
+
+	for (const [key, value] of Object.entries(requestDetails.headers)) {
+		if (sensitiveHeaders.some(sensitive => key.toLowerCase() === sensitive.toLowerCase())) {
+			// Mask the credential value
+			if (value && value.length > 0) {
+				const maskedLength = Math.min(4, value.length);
+				sanitizedHeaders[key] = `${value.substring(0, maskedLength)}${'*'.repeat(Math.max(8, value.length - maskedLength))}`;
+			} else {
+				sanitizedHeaders[key] = '***';
+			}
+		} else {
+			sanitizedHeaders[key] = value;
+		}
+	}
+
+	return {
+		...requestDetails,
+		headers: sanitizedHeaders,
+	};
+}
+
+/**
  * Make authenticated API request to Celum Mediabank
  */
 export async function apiRequest(
@@ -70,17 +111,17 @@ export async function apiRequest(
 ): Promise<
 	| IDataObject
 	| {
-			body: IDataObject;
-			headers: Record<string, string | string[]>;
-			statusCode?: number;
-			request?: {
-				method: string;
-				url: string;
-				headers: Record<string, string>;
-				body?: IDataObject;
-				queryParams?: Record<string, string | string[] | number[] | boolean | number>;
-			};
-	  }
+		body: IDataObject;
+		headers: Record<string, string | string[]>;
+		statusCode?: number;
+		request?: {
+			method: string;
+			url: string;
+			headers: Record<string, string>;
+			body?: IDataObject;
+			queryParams?: Record<string, string | string[] | number[] | boolean | number>;
+		};
+	}
 > {
 	const credentials = await getCredentials.call(this);
 
@@ -102,15 +143,15 @@ export async function apiRequest(
 	// Build request details if needed
 	const requestDetails = returnFullRequest
 		? {
-				method,
-				url,
-				headers: {
-					'X-API-KEY': credentials.apiKey,
-					'Content-Type': 'application/json',
-				},
-				...(body && { body }),
-				...(queryParams && Object.keys(queryParams).length > 0 && { queryParams }),
-		  }
+			method,
+			url,
+			headers: {
+				'X-API-KEY': credentials.apiKey,
+				'Content-Type': 'application/json',
+			},
+			...(body && { body }),
+			...(queryParams && Object.keys(queryParams).length > 0 && { queryParams }),
+		}
 		: undefined;
 
 	// Debug: Log the full request details
@@ -148,12 +189,12 @@ export async function apiRequest(
 			hasHeaders: 'headers' in response,
 			responseStructure: JSON.stringify(response, null, 2).substring(0, 500),
 		});
-		
+
 		// Check for error status codes (non-2xx) if throwOnError is enabled
 		const statusCode = (response as { statusCode?: number })?.statusCode;
 		if (throwOnError && statusCode && (statusCode < 200 || statusCode >= 300)) {
-			const errorBody = returnFullResponse && 'body' in response 
-				? response.body 
+			const errorBody = returnFullResponse && 'body' in response
+				? response.body
 				: response;
 			const errorMessage = typeof errorBody === 'object' && errorBody !== null
 				? JSON.stringify(errorBody)
@@ -162,7 +203,7 @@ export async function apiRequest(
 				`API request failed with status ${statusCode}: ${errorMessage}`,
 			);
 		}
-		
+
 		if (returnFullResponse) {
 			// When returnFullResponse is true, n8n returns { body, headers, statusCode }
 			// The response itself contains body and headers properties
@@ -171,30 +212,86 @@ export async function apiRequest(
 					body: response.body as IDataObject,
 					headers: response.headers as Record<string, string | string[]>,
 					...(response.statusCode && { statusCode: response.statusCode }),
-					...(requestDetails && { request: requestDetails }),
+					...(requestDetails && { request: sanitizeRequestDetails(requestDetails) }),
 				};
 			}
 			// Fallback: if structure is different, return as-is
 			const fallbackResponse = response as IDataObject & Record<string, unknown>;
 			if (requestDetails) {
-				return { ...fallbackResponse, request: requestDetails };
+				return { ...fallbackResponse, request: sanitizeRequestDetails(requestDetails) };
 			}
 			return fallbackResponse;
 		}
-		
+
 		if (returnFullRequest && requestDetails) {
-			return { ...(response as IDataObject), request: requestDetails };
+			return { ...(response as IDataObject), request: sanitizeRequestDetails(requestDetails) };
 		}
-		
+
 		return response as IDataObject & Record<string, unknown>;
 	} catch (error) {
-		// Enhanced error logging
+		// Extract actual server response from error
+		const httpError = error as {
+			response?: {
+				status?: number;
+				statusText?: string;
+				data?: unknown;
+				headers?: Record<string, string | string[]>;
+			};
+			message?: string;
+		};
+
+		// If we have a response with status code, extract the actual server response
+		if (httpError.response && httpError.response.status) {
+			const statusCode = httpError.response.status;
+			const statusText = httpError.response.statusText || '';
+			const responseData = httpError.response.data;
+			const responseHeaders = httpError.response.headers;
+
+			// Format the actual server response
+			let serverResponse = '';
+			if (responseData !== undefined && responseData !== null) {
+				if (typeof responseData === 'object') {
+					try {
+						serverResponse = JSON.stringify(responseData, null, 2);
+					} catch {
+						serverResponse = String(responseData);
+					}
+				} else {
+					serverResponse = String(responseData);
+				}
+			}
+
+			// Build comprehensive error message with actual server response
+			let errorMessage = `API request failed with status ${statusCode}${statusText ? ` ${statusText}` : ''}`;
+			if (serverResponse) {
+				errorMessage += `\n\nServer Response:\n${serverResponse}`;
+			}
+
+			// Enhanced error logging
+			console.error('[Celum Mediabank] API Request failed:', {
+				method,
+				url,
+				statusCode,
+				statusText,
+				responseData,
+				responseHeaders,
+			});
+
+			// Create error with actual server response
+			const enhancedError = new Error(errorMessage);
+			// Preserve original error properties
+			if (error instanceof Error) {
+				enhancedError.name = error.name;
+				enhancedError.stack = error.stack;
+			}
+			throw enhancedError;
+		}
+
+		// For other errors (network, etc.), throw as-is
 		console.error('[Celum Mediabank] API Request failed:', {
 			method,
 			url,
 			error: error instanceof Error ? error.message : String(error),
-			statusCode: (error as { response?: { status?: number } })?.response?.status,
-			responseData: (error as { response?: { data?: unknown } })?.response?.data,
 		});
 		throw error;
 	}
