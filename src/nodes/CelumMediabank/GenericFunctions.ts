@@ -190,9 +190,36 @@ export async function apiRequest(
 			responseStructure: JSON.stringify(response, null, 2).substring(0, 500),
 		});
 
-		// Check for error status codes (non-2xx) if throwOnError is enabled
+		// Check for error status codes (non-2xx)
 		const statusCode = (response as { statusCode?: number })?.statusCode;
-		if (throwOnError && statusCode && (statusCode < 200 || statusCode >= 300)) {
+		const isErrorStatus = statusCode && (statusCode < 200 || statusCode >= 300);
+
+		// If we have an error status and returnFullResponse/returnFullRequest is enabled,
+		// return the structured response instead of throwing
+		if (isErrorStatus && (returnFullResponse || returnFullRequest)) {
+			if (returnFullResponse && 'body' in response && 'headers' in response) {
+				return {
+					body: response.body as IDataObject,
+					headers: response.headers as Record<string, string | string[]>,
+					...(response.statusCode && { statusCode: response.statusCode }),
+					...(requestDetails && { request: sanitizeRequestDetails(requestDetails) }),
+				};
+			}
+			if (returnFullRequest && requestDetails) {
+				const responseData = returnFullResponse && 'body' in response
+					? response.body
+					: response;
+				return {
+					...(responseData as IDataObject),
+					request: sanitizeRequestDetails(requestDetails),
+					...(response.statusCode && { statusCode: response.statusCode }),
+					...(returnFullResponse && 'headers' in response && { headers: response.headers }),
+				};
+			}
+		}
+
+		// If error status and throwOnError is enabled, throw error
+		if (isErrorStatus && throwOnError) {
 			const errorBody = returnFullResponse && 'body' in response
 				? response.body
 				: response;
@@ -246,6 +273,79 @@ export async function apiRequest(
 			const statusText = httpError.response.statusText || '';
 			const responseData = httpError.response.data;
 			const responseHeaders = httpError.response.headers;
+
+			// If returnFullResponse or returnFullRequest is enabled, return structured response instead of throwing
+			if (returnFullResponse || returnFullRequest) {
+				const responseBody: IDataObject = typeof responseData === 'object' && responseData !== null
+					? (responseData as IDataObject)
+					: { message: String(responseData || '') };
+
+				const result: {
+					body: IDataObject;
+					headers: Record<string, string | string[]>;
+					statusCode: number;
+					request?: {
+						method: string;
+						url: string;
+						headers: Record<string, string>;
+						body?: IDataObject;
+						queryParams?: Record<string, string | string[] | number[] | boolean | number>;
+					};
+				} = {
+					body: responseBody,
+					headers: responseHeaders || {},
+					statusCode,
+				};
+
+				if (requestDetails) {
+					result.request = sanitizeRequestDetails(requestDetails);
+				}
+
+				// Only throw if throwOnError is enabled
+				if (throwOnError) {
+					// Format the actual server response for error message
+					let serverResponse = '';
+					if (responseData !== undefined && responseData !== null) {
+						if (typeof responseData === 'object') {
+							try {
+								serverResponse = JSON.stringify(responseData, null, 2);
+							} catch {
+								serverResponse = String(responseData);
+							}
+						} else {
+							serverResponse = String(responseData);
+						}
+					}
+
+					// Build comprehensive error message with actual server response
+					let errorMessage = `API request failed with status ${statusCode}${statusText ? ` ${statusText}` : ''}`;
+					if (serverResponse) {
+						errorMessage += `\n\nServer Response:\n${serverResponse}`;
+					}
+
+					// Enhanced error logging
+					console.error('[Celum Mediabank] API Request failed:', {
+						method,
+						url,
+						statusCode,
+						statusText,
+						responseData,
+						responseHeaders,
+					});
+
+					// Create error with actual server response
+					const enhancedError = new Error(errorMessage);
+					// Preserve original error properties
+					if (error instanceof Error) {
+						enhancedError.name = error.name;
+						enhancedError.stack = error.stack;
+					}
+					throw enhancedError;
+				}
+
+				// Return the structured error response
+				return result;
+			}
 
 			// Format the actual server response
 			let serverResponse = '';
