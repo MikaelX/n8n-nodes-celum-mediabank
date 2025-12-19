@@ -8,6 +8,8 @@ import * as createAssetVersion from './createAssetVersion.operation';
 import * as requestUploadLocation from './requestUploadLocation.operation';
 import * as uploadBinary from './uploadBinary.operation';
 import * as searchCollections from './searchCollections.operation';
+import * as createCollection from './createCollection.operation';
+import * as getCollection from './getCollection.operation';
 import * as getAssetType from './getAssetType.operation';
 
 export const operations: Record<
@@ -52,6 +54,14 @@ export const operations: Record<
 	searchCollections: {
 		description: searchCollections.description,
 		execute: searchCollections.execute,
+	},
+	createCollection: {
+		description: createCollection.description,
+		execute: createCollection.execute,
+	},
+	getCollection: {
+		description: getCollection.description,
+		execute: getCollection.execute,
 	},
 	getAssetType: {
 		description: getAssetType.description,

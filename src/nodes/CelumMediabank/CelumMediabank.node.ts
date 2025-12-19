@@ -90,6 +90,18 @@ export class CelumMediabank implements INodeType {
 						description: 'Search for collections by name or parent',
 						action: 'Search collections',
 					},
+					{
+						name: 'Get Collection',
+						value: 'getCollection',
+						description: 'Get a specific collection by ID',
+						action: 'Get collection',
+					},
+					{
+						name: 'Create Collection',
+						value: 'createCollection',
+						description: 'Create a new collection',
+						action: 'Create collection',
+					},
 					// Asset Type Operations
 					{
 						name: 'Get Asset Type',
@@ -107,7 +119,7 @@ export class CelumMediabank implements INodeType {
 					// Merge displayOptions instead of replacing them
 					const existingDisplayOptions = prop.displayOptions || {};
 					const existingShow = existingDisplayOptions.show || {};
-					
+
 					return {
 						...prop,
 						displayOptions: {
