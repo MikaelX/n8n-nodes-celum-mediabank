@@ -11,6 +11,14 @@ export const description: INodeProperties[] = [
         description: 'Name of the collection to create',
     },
     {
+        displayName: 'Name Locale',
+        name: 'nameLocale',
+        type: 'string',
+        default: 'en',
+        required: true,
+        description: 'Locale code for the collection name (e.g., "en", "de", "fr")',
+    },
+    {
         displayName: 'Parent Collection ID',
         name: 'parentId',
         type: 'number',
@@ -80,6 +88,7 @@ export async function execute(
     itemIndex: number,
 ): Promise<INodeExecutionData> {
     const name = this.getNodeParameter('name', itemIndex) as string;
+    const nameLocale = this.getNodeParameter('nameLocale', itemIndex, 'en') as string;
     const parentId = this.getNodeParameter('parentId', itemIndex) as number;
     const validationLevelInherited = this.getNodeParameter('validationLevelInherited', itemIndex) as boolean;
     const validationLevel = validationLevelInherited
@@ -91,12 +100,14 @@ export async function execute(
 
     // Build request body
     const body: {
-        name: string;
+        name: Record<string, string>;
         parentId: number;
         validationLevelInherited: boolean;
         validationLevel?: string;
     } = {
-        name,
+        name: {
+            [nameLocale]: name,
+        },
         parentId,
         validationLevelInherited,
     };
