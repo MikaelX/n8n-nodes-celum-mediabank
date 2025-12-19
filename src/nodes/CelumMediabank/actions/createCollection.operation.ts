@@ -22,6 +22,44 @@ export const description: INodeProperties[] = [
         description: 'ID of the parent collection where the new collection will be created',
     },
     {
+        displayName: 'Validation Level',
+        name: 'validationLevel',
+        type: 'options',
+        options: [
+            {
+                name: 'None',
+                value: 'NONE',
+            },
+            {
+                name: 'Low',
+                value: 'LOW',
+            },
+            {
+                name: 'Medium',
+                value: 'MEDIUM',
+            },
+            {
+                name: 'High',
+                value: 'HIGH',
+            },
+            {
+                name: 'Strict',
+                value: 'STRICT',
+            },
+        ],
+        default: 'NONE',
+        required: true,
+        description: 'Validation level for the collection',
+    },
+    {
+        displayName: 'Validation Level Inherited',
+        name: 'validationLevelInherited',
+        type: 'boolean',
+        default: false,
+        required: true,
+        description: 'Whether the validation level is inherited from the parent collection',
+    },
+    {
         displayName: 'Return Response Headers and Body',
         name: 'returnFullResponse',
         type: 'boolean',
@@ -50,6 +88,8 @@ export async function execute(
 ): Promise<INodeExecutionData> {
     const name = this.getNodeParameter('name', itemIndex) as string;
     const parentId = this.getNodeParameter('parentId', itemIndex) as number;
+    const validationLevel = this.getNodeParameter('validationLevel', itemIndex) as string;
+    const validationLevelInherited = this.getNodeParameter('validationLevelInherited', itemIndex) as boolean;
     const returnFullResponse = this.getNodeParameter('returnFullResponse', itemIndex, false) as boolean;
     const returnFullRequest = this.getNodeParameter('returnFullRequest', itemIndex, false) as boolean;
     const throwOnError = this.getNodeParameter('throwOnError', itemIndex, true) as boolean;
@@ -58,9 +98,13 @@ export async function execute(
     const body: {
         name: string;
         parentId: number;
+        validationLevel: string;
+        validationLevelInherited: boolean;
     } = {
         name,
         parentId,
+        validationLevel,
+        validationLevelInherited,
     };
 
     // Make API request
