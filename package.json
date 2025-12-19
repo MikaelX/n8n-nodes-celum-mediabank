@@ -1,6 +1,6 @@
 {
 	"name": "n8n-nodes-celum-mediabank",
-	"version": "1.0.15",
+	"version": "1.0.16",
 	"description": "n8n node for Celum Mediabank API",
 	"keywords": [
 		"n8n-community-node-package",

@@ -22,42 +22,35 @@ export const description: INodeProperties[] = [
         description: 'ID of the parent collection where the new collection will be created',
     },
     {
+        displayName: 'Validation Level Inherited',
+        name: 'validationLevelInherited',
+        type: 'boolean',
+        default: false,
+        required: true,
+        description: 'Whether the validation level is inherited from the parent collection. When true, validationLevel must not be set.',
+    },
+    {
         displayName: 'Validation Level',
         name: 'validationLevel',
         type: 'options',
         options: [
             {
-                name: 'None',
-                value: 'NONE',
-            },
-            {
-                name: 'Low',
-                value: 'LOW',
-            },
-            {
-                name: 'Medium',
-                value: 'MEDIUM',
-            },
-            {
-                name: 'High',
-                value: 'HIGH',
+                name: 'Tolerant',
+                value: 'TOLERANT',
             },
             {
                 name: 'Strict',
                 value: 'STRICT',
             },
         ],
-        default: 'NONE',
-        required: true,
-        description: 'Validation level for the collection',
-    },
-    {
-        displayName: 'Validation Level Inherited',
-        name: 'validationLevelInherited',
-        type: 'boolean',
-        default: false,
-        required: true,
-        description: 'Whether the validation level is inherited from the parent collection',
+        default: 'STRICT',
+        required: false,
+        description: 'Level of validation. Defaults to STRICT for root collections and when validationLevelInherited is false for child collections. Must not be set when validationLevelInherited is true.',
+        displayOptions: {
+            show: {
+                validationLevelInherited: [false],
+            },
+        },
     },
     {
         displayName: 'Return Response Headers and Body',
@@ -88,8 +81,10 @@ export async function execute(
 ): Promise<INodeExecutionData> {
     const name = this.getNodeParameter('name', itemIndex) as string;
     const parentId = this.getNodeParameter('parentId', itemIndex) as number;
-    const validationLevel = this.getNodeParameter('validationLevel', itemIndex) as string;
     const validationLevelInherited = this.getNodeParameter('validationLevelInherited', itemIndex) as boolean;
+    const validationLevel = validationLevelInherited
+        ? undefined
+        : (this.getNodeParameter('validationLevel', itemIndex, 'STRICT') as string);
     const returnFullResponse = this.getNodeParameter('returnFullResponse', itemIndex, false) as boolean;
     const returnFullRequest = this.getNodeParameter('returnFullRequest', itemIndex, false) as boolean;
     const throwOnError = this.getNodeParameter('throwOnError', itemIndex, true) as boolean;
@@ -98,14 +93,18 @@ export async function execute(
     const body: {
         name: string;
         parentId: number;
-        validationLevel: string;
         validationLevelInherited: boolean;
+        validationLevel?: string;
     } = {
         name,
         parentId,
-        validationLevel,
         validationLevelInherited,
     };
+
+    // Only include validationLevel when validationLevelInherited is false
+    if (!validationLevelInherited && validationLevel) {
+        body.validationLevel = validationLevel;
+    }
 
     // Make API request
     const responseData = await apiRequest.call(
