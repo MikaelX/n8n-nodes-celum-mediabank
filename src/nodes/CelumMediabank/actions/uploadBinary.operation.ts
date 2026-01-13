@@ -6,6 +6,7 @@ import type {
 	IHttpRequestOptions,
 	IDataObject,
 } from 'n8n-workflow';
+import { BINARY_ENCODING } from 'n8n-workflow';
 import type { Readable } from 'stream';
 import { Readable as ReadableStream } from 'stream';
 import { apiRequest, getCredentials, getAuthHeaders } from '../GenericFunctions';
@@ -155,18 +156,19 @@ export const description: INodeProperties[] = [
 async function uploadBinaryFile(
 	this: IExecuteFunctions,
 	uploadUrl: string,
-	binaryStream: Readable,
+	binaryStream: Readable | Buffer,
 	bodyContentType: string,
 	formFieldName: string,
 	binaryPropertyName: string,
 	itemIndex: number,
 	fileSize?: number,
+	binaryData?: { mimeType?: string; fileName?: string },
 ): Promise<unknown> {
 	// Get credentials to apply authentication headers from credential's authenticate property
 	const credentials = await getCredentials.call(this);
 	const inputData = this.getInputData();
 	const item = inputData[itemIndex];
-	const binaryProperty = item.binary?.[binaryPropertyName];
+	const binaryProperty = item.binary?.[binaryPropertyName] || binaryData;
 
 	if (!binaryProperty) {
 		throw new Error(`No binary property "${binaryPropertyName}" found`);
@@ -181,7 +183,7 @@ async function uploadBinaryFile(
 		// Upload as form-data/multipart (POST) - use stream directly
 		// n8n HTTP Request node uses: parameterType: "formBinaryData", contentType: "multipart-form-data"
 		const mimeType = (binaryProperty?.mimeType as string) || 'application/octet-stream';
-		const fileName = (binaryProperty?.fileName as string) || String(binaryProperty?.name || 'file');
+		const fileName = (binaryProperty?.fileName as string) || 'file';
 
 		// Use formData property with { value, options } structure
 		// Streams can be passed directly to formData - the request library will handle it
@@ -270,7 +272,7 @@ export async function execute(
 	// Verify binary data exists in input item
 	const inputData = this.getInputData();
 	const item = inputData[itemIndex];
-	
+
 	if (!item) {
 		throw new Error('No input item found at the specified index');
 	}
@@ -293,37 +295,36 @@ export async function execute(
 		);
 	}
 
-	// Get binary data stream - use streaming to avoid loading entire file into memory
-	// This is more memory-efficient for large files
-	// Try to get stream first, fall back to buffer if streaming not available
-	let binaryStream: Readable;
-	
-	try {
-		// Attempt to get stream directly using property name and itemIndex
-		// Parameter order: property name first, then itemIndex
-		binaryStream = await this.helpers.getBinaryStream(binaryPropertyName, itemIndex);
-	} catch (error) {
-		// If streaming fails, fall back to using buffer but create a readable stream from it
-		// This still provides better memory management than loading everything at once
-		const binaryData = await this.helpers.getBinaryDataBuffer(itemIndex, binaryPropertyName);
-		if (!binaryData) {
-			throw new Error(
-				`Failed to retrieve binary data from property "${binaryPropertyName}". ` +
-				`The binary property exists but contains no data. ` +
-				`Please ensure the binary data is properly set in the input item.`,
-			);
-		}
-		
-		// Create a readable stream from the buffer
-		// This provides better memory management than passing the entire buffer
-		binaryStream = ReadableStream.from(binaryData);
+	// Get binary data using n8n's pattern - matches HttpRequestV3 implementation exactly
+	// Use assertBinaryData to get binary data object, then check for id to get stream
+	const binaryData = this.helpers.assertBinaryData(itemIndex, binaryPropertyName);
+
+	let uploadData: Readable | Buffer;
+	let fileSize: number | undefined;
+
+	if (binaryData.id) {
+		// If binary data has an ID, use getBinaryStream for efficient streaming
+		// This is the preferred method as it doesn't load the entire file into memory
+		// Note: getBinaryStream only takes the ID, not itemIndex
+		uploadData = await this.helpers.getBinaryStream(binaryData.id);
+		// Get file size from metadata
+		const metadata = await this.helpers.getBinaryMetadata(binaryData.id);
+		fileSize = metadata.fileSize;
+	} else {
+		// Fallback: if no ID, data is stored inline (base64)
+		// Convert to buffer - can be used directly or converted to stream if needed
+		uploadData = Buffer.from(binaryData.data, BINARY_ENCODING);
+		fileSize = uploadData.length;
 	}
 
-	// Get file size if available (for optional Content-Length header)
-	// This is optional - streaming will work with or without it
-	const fileSize = item.binary?.[binaryPropertyName]?.fileSize 
-		? Number(item.binary[binaryPropertyName].fileSize) 
-		: undefined;
+	// If uploadData is a Buffer and we need streaming, convert it to a readable stream
+	// This is more memory-efficient for large files
+	let binaryStream: Readable;
+	if (Buffer.isBuffer(uploadData)) {
+		binaryStream = ReadableStream.from(uploadData);
+	} else {
+		binaryStream = uploadData;
+	}
 
 	// Upload the binary file to the provided URL using streaming
 	// This avoids loading the entire file into memory, making it suitable for large files
@@ -336,6 +337,7 @@ export async function execute(
 		binaryPropertyName,
 		itemIndex,
 		fileSize,
+		binaryData,
 	);
 
 	// Optionally create version
@@ -403,8 +405,8 @@ export async function execute(
 
 		if (returnFullRequest && 'request' in versionResponse) {
 			const responseObj = versionResponse as IDataObject & { request: unknown };
-			const baseVersion = typeof responseObj === 'object' && responseObj !== null 
-				? { ...responseObj } 
+			const baseVersion = typeof responseObj === 'object' && responseObj !== null
+				? { ...responseObj }
 				: { data: responseObj };
 			return {
 				json: {
