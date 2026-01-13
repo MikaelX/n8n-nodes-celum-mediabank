@@ -6,6 +6,7 @@ import type {
 	IHttpRequestOptions,
 	IDataObject,
 } from 'n8n-workflow';
+import type { Readable } from 'stream';
 import { apiRequest, getCredentials, getAuthHeaders } from '../GenericFunctions';
 
 export const description: INodeProperties[] = [
@@ -147,17 +148,18 @@ export const description: INodeProperties[] = [
 ];
 
 /**
- * Upload binary file to the upload URL
- * This matches n8n HTTP Request node behavior exactly - no special handling for presigned URLs
+ * Upload binary file to the upload URL using streaming to avoid loading entire file into memory
+ * This uses streams instead of buffers to handle large files efficiently
  */
 async function uploadBinaryFile(
 	this: IExecuteFunctions,
 	uploadUrl: string,
-	binaryData: Buffer,
+	binaryStream: Readable,
 	bodyContentType: string,
 	formFieldName: string,
 	binaryPropertyName: string,
 	itemIndex: number,
+	fileSize?: number,
 ): Promise<unknown> {
 	// Get credentials to apply authentication headers from credential's authenticate property
 	const credentials = await getCredentials.call(this);
@@ -175,20 +177,19 @@ async function uploadBinaryFile(
 	const authHeaders = getAuthHeaders(credentials);
 
 	if (bodyContentType === 'formData') {
-		// Upload as form-data/multipart (POST) - matches n8n HTTP Request node with formBinaryData
+		// Upload as form-data/multipart (POST) - use stream directly
 		// n8n HTTP Request node uses: parameterType: "formBinaryData", contentType: "multipart-form-data"
 		const mimeType = (binaryProperty?.mimeType as string) || 'application/octet-stream';
 		const fileName = (binaryProperty?.fileName as string) || String(binaryProperty?.name || 'file');
 
 		// Use formData property with { value, options } structure
-		// This matches HTTP Request node behavior - it uses helpers.request with formData property
-		// The request helper automatically converts { value, options } to FormData
+		// Streams can be passed directly to formData - the request library will handle it
 		const options: IRequestOptions = {
 			method: 'POST',
 			url: uploadUrl,
 			formData: {
 				[formFieldName]: {
-					value: binaryData,
+					value: binaryStream,
 					options: {
 						filename: fileName,
 						contentType: mimeType,
@@ -198,8 +199,6 @@ async function uploadBinaryFile(
 		};
 
 		// Add credential headers if configured
-		// HTTP Request node adds credential headers when configured
-		// The credential system handles whether headers are needed for the specific URL
 		if (Object.keys(authHeaders).length > 0) {
 			options.headers = authHeaders;
 		}
@@ -215,20 +214,26 @@ async function uploadBinaryFile(
 			);
 		}
 	} else {
-		// Upload as raw binary (PUT) - matches n8n HTTP Request node with binaryData
-		// n8n HTTP Request node sets content-type and content-length headers automatically
+		// Upload as raw binary (PUT) - stream directly
+		// Don't set Content-Length when streaming - let the HTTP library handle it
 		const mimeType = (binaryProperty?.mimeType as string) || 'application/octet-stream';
-		const contentLength = binaryData.length;
+
+		const headers: Record<string, string> = {
+			...authHeaders,
+			'Content-Type': mimeType,
+		};
+
+		// Only set Content-Length if we know the file size (for optimization)
+		// Otherwise, let the HTTP library handle chunked transfer encoding
+		if (fileSize !== undefined && fileSize > 0) {
+			headers['Content-Length'] = String(fileSize);
+		}
 
 		const options: IHttpRequestOptions = {
 			method: 'PUT',
 			url: uploadUrl,
-			body: binaryData,
-			headers: {
-				...authHeaders,
-				'Content-Type': mimeType,
-				'Content-Length': String(contentLength),
-			},
+			body: binaryStream,
+			headers,
 		};
 
 		try {
@@ -287,26 +292,35 @@ export async function execute(
 		);
 	}
 
-	// Get binary data - same as n8n HTTP Request node
-	const binaryData = await this.helpers.getBinaryDataBuffer(itemIndex, binaryPropertyName);
-	if (!binaryData) {
+	// Get binary data stream - use streaming to avoid loading entire file into memory
+	// This is more memory-efficient for large files
+	// getBinaryStream returns a Promise that resolves to the stream from the binary property
+	const binaryStream = await this.helpers.getBinaryStream(binaryPropertyName, itemIndex);
+	if (!binaryStream) {
 		throw new Error(
-			`Failed to retrieve binary data from property "${binaryPropertyName}". ` +
+			`Failed to retrieve binary data stream from property "${binaryPropertyName}". ` +
 			`The binary property exists but contains no data. ` +
 			`Please ensure the binary data is properly set in the input item.`,
 		);
 	}
 
-	// Upload the binary file to the provided URL
-	// This behaves exactly like n8n HTTP Request node - no special presigned URL handling
+	// Get file size if available (for optional Content-Length header)
+	// This is optional - streaming will work with or without it
+	const fileSize = item.binary?.[binaryPropertyName]?.fileSize 
+		? Number(item.binary[binaryPropertyName].fileSize) 
+		: undefined;
+
+	// Upload the binary file to the provided URL using streaming
+	// This avoids loading the entire file into memory, making it suitable for large files
 	await uploadBinaryFile.call(
 		this,
 		uploadUrl,
-		binaryData,
+		binaryStream,
 		bodyContentType,
 		formFieldName,
 		binaryPropertyName,
 		itemIndex,
+		fileSize,
 	);
 
 	// Optionally create version
