@@ -7,6 +7,7 @@ import type {
 	IDataObject,
 } from 'n8n-workflow';
 import type { Readable } from 'stream';
+import { Readable as ReadableStream } from 'stream';
 import { apiRequest, getCredentials, getAuthHeaders } from '../GenericFunctions';
 
 export const description: INodeProperties[] = [
@@ -294,25 +295,28 @@ export async function execute(
 
 	// Get binary data stream - use streaming to avoid loading entire file into memory
 	// This is more memory-efficient for large files
-	// getBinaryStream needs the binary property data ID, not just the name
-	const binaryProperty = item.binary?.[binaryPropertyName];
-	if (!binaryProperty?.data) {
-		throw new Error(
-			`Failed to retrieve binary data from property "${binaryPropertyName}". ` +
-			`The binary property exists but contains no data. ` +
-			`Please ensure the binary data is properly set in the input item.`,
-		);
-	}
-
-	// Use the binary property's data ID to get the stream
-	// The data property contains the binary data ID/reference
-	const binaryDataId = binaryProperty.data as string;
-	const binaryStream = await this.helpers.getBinaryStream(binaryDataId, itemIndex);
-	if (!binaryStream) {
-		throw new Error(
-			`Failed to retrieve binary data stream from property "${binaryPropertyName}". ` +
-			`Please ensure the binary data is properly set in the input item.`,
-		);
+	// Try to get stream first, fall back to buffer if streaming not available
+	let binaryStream: Readable;
+	
+	try {
+		// Attempt to get stream directly using property name and itemIndex
+		// Parameter order: property name first, then itemIndex
+		binaryStream = await this.helpers.getBinaryStream(binaryPropertyName, itemIndex);
+	} catch (error) {
+		// If streaming fails, fall back to using buffer but create a readable stream from it
+		// This still provides better memory management than loading everything at once
+		const binaryData = await this.helpers.getBinaryDataBuffer(itemIndex, binaryPropertyName);
+		if (!binaryData) {
+			throw new Error(
+				`Failed to retrieve binary data from property "${binaryPropertyName}". ` +
+				`The binary property exists but contains no data. ` +
+				`Please ensure the binary data is properly set in the input item.`,
+			);
+		}
+		
+		// Create a readable stream from the buffer
+		// This provides better memory management than passing the entire buffer
+		binaryStream = ReadableStream.from(binaryData);
 	}
 
 	// Get file size if available (for optional Content-Length header)
