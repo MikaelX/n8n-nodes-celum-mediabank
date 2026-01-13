@@ -6,7 +6,6 @@ import type {
 	IHttpRequestOptions,
 	IDataObject,
 } from 'n8n-workflow';
-import { BINARY_ENCODING } from 'n8n-workflow';
 import type { Readable } from 'stream';
 import { Readable as ReadableStream } from 'stream';
 import { apiRequest, getCredentials, getAuthHeaders } from '../GenericFunctions';
@@ -313,7 +312,8 @@ export async function execute(
 	} else {
 		// Fallback: if no ID, data is stored inline (base64)
 		// Convert to buffer - can be used directly or converted to stream if needed
-		uploadData = Buffer.from(binaryData.data, BINARY_ENCODING);
+		// Use 'base64' directly instead of importing BINARY_ENCODING to avoid module resolution issues
+		uploadData = Buffer.from(binaryData.data, 'base64');
 		fileSize = uploadData.length;
 	}
 
