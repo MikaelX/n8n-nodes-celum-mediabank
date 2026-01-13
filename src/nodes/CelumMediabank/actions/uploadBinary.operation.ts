@@ -294,12 +294,23 @@ export async function execute(
 
 	// Get binary data stream - use streaming to avoid loading entire file into memory
 	// This is more memory-efficient for large files
-	// getBinaryStream returns a Promise that resolves to the stream from the binary property
-	const binaryStream = await this.helpers.getBinaryStream(binaryPropertyName, itemIndex);
+	// getBinaryStream needs the binary property data ID, not just the name
+	const binaryProperty = item.binary?.[binaryPropertyName];
+	if (!binaryProperty?.data) {
+		throw new Error(
+			`Failed to retrieve binary data from property "${binaryPropertyName}". ` +
+			`The binary property exists but contains no data. ` +
+			`Please ensure the binary data is properly set in the input item.`,
+		);
+	}
+
+	// Use the binary property's data ID to get the stream
+	// The data property contains the binary data ID/reference
+	const binaryDataId = binaryProperty.data as string;
+	const binaryStream = await this.helpers.getBinaryStream(binaryDataId, itemIndex);
 	if (!binaryStream) {
 		throw new Error(
 			`Failed to retrieve binary data stream from property "${binaryPropertyName}". ` +
-			`The binary property exists but contains no data. ` +
 			`Please ensure the binary data is properly set in the input item.`,
 		);
 	}
